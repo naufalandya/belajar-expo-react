@@ -1,39 +1,56 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+import { useEffect, useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import { useRouter } from 'expo-router';
+import { Platform } from 'react-native';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null); // Start with null to check loading state
+  const router = useRouter();
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+    const checkAuth = async () => {
+      try {
+        let token;
+        if (Platform.OS === 'web') {
+          token = localStorage.getItem('access_token');
+        } else {
+          token = await SecureStore.getItemAsync('access_token');
+        }
 
-  if (!loaded) {
-    return null;
+        if (token) {
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch (error) {
+        console.error('Error checking authentication:', error);
+        setIsAuthenticated(false);
+      }
+    };
+
+    checkAuth();
+  }, [router]);
+
+  useEffect(() => {
+    // Once authentication check is complete, perform navigation
+    if (isAuthenticated === null) return; // Wait until the authentication check is complete
+
+    if (isAuthenticated === false) {
+      router.replace('/login'); // Redirect to login page if not authenticated
+    }
+  }, [isAuthenticated, router]);
+
+  // Show a loading spinner or placeholder while authentication check is in progress
+  if (isAuthenticated === null) {
+    return null; // Or return a loading spinner or splash screen here
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <Stack>
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="+not-found" />
+    </Stack>
   );
 }
